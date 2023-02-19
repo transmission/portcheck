@@ -80,24 +80,33 @@ Handler(struct evhttp_request *req, void *arg)
         /* IPv4-mapped IPv6 address */
         p_ip += 7;
     }
-    if (inet_addr(p_ip) == INADDR_NONE) {
+    char p_port[8];
+    snprintf(p_port, sizeof(p_port), "%ld", i_port);
+    struct addrinfo hints;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_NUMERICHOST;
+    struct addrinfo *p_results = NULL;
+    if (getaddrinfo(p_ip, p_port, &hints, &p_results) != 0) {
+        goto error;
+    }
+    if (p_results == NULL) {
         goto error;
     }
 
     /* We have a proper IP and port, try to connect to it */
-    int s = socket(AF_INET, SOCK_STREAM, 0);
+    int s = socket(p_results->ai_family, p_results->ai_socktype, 0);
     if (s < 0) {
+        freeaddrinfo(p_results);
         goto error;
     }
     if (fcntl(s, F_SETFL, O_NONBLOCK) != 0) {
+        freeaddrinfo(p_results);
         close(s);
         goto error;
     }
-    struct sockaddr_in addr;
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = inet_addr(p_ip);
-    addr.sin_port = htons(i_port);
-    if (connect(s, (struct sockaddr *)&addr, sizeof(addr)) == 0) {
+    if (connect(s, p_results->ai_addr, p_results->ai_addrlen) == 0) {
         /* Immediate success */
         close(s);
         SendReply(req, 1);
@@ -112,6 +121,7 @@ Handler(struct evhttp_request *req, void *arg)
         tv.tv_usec = 0;
         event_once(s, EV_WRITE, WriteCallback, req, &tv);
     }
+    freeaddrinfo(p_results);
     return;
 
 error:
