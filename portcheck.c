@@ -1,3 +1,6 @@
+// Copyright (c) 2010-2023 Eric Petit and other contributors.
+// Use of this source code is governed by the MIT license.
+
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
